@@ -7,17 +7,226 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
-crop_data <- read.csv("D:/(A) Gauravjit/NYU MASTERS COURSE/OneDrive - nyu.edu/SEM 2/Data Analytics/PROJECT 3/India Agriculture Crop Production.csv")
+# This chunk is the main data set to be used by all team members -
+
+```{r setup}
+crop_data <- read.csv("https://raw.githubusercontent.com/gauravjit112/DAPi-Course/main/India%20Agriculture%20Crop%20Production.csv", 
+                header = T, 
+                stringsAsFactors = F)
+
 crop_data[crop_data==""]=NA
 sum(is.na(crop_data))
 
-summary(crop_data)
-str(crop_data)
-hist(crop_data$Production)
+#summary(crop_data)
+#str(crop_data)
 
+# Cleaning the data 
 crop_data <- na.omit(crop_data) # remove rows with missing values
 crop_data$Year <- as.factor(crop_data$Year) # convert Year to a factor variable
+
+
+## Converting the Units to Tonnes
+library(dplyr)
+
+# create a lookup table of crop unit conversion rates to Tonnes
+conversion_table <- data.frame(
+  Crop.Unit = c("Kg", "Quintal", "Tonnes", "Bales", "Nuts"), # add other crop units as needed
+  Conversion.Rate = c(0.001, 0.1, 1, 0.218, 0.003)
+)
+
+# join the lookup table with the crop_data dataframe and calculate the production in Tonnes for each row
+crop_data <- crop_data %>%
+  left_join(conversion_table, by = c("Production.Units" = "Crop.Unit")) %>%
+  mutate(Production_Tonnes = Production * Conversion.Rate)
+######  select(-c(Conversion.Rate))
+
+# check the updated dataframe
+#head(crop_data)
+
+
+```
+
+## Cleaning the data set in Crop_data
+
+```{r}
+
+# To remove all the rows with state "Andaman and Nicobar Islands" and "Chandigarh" from the crop_data
+library(dplyr)
+
+crop_data <- crop_data %>%
+  filter(State != "Andaman and Nicobar Islands" & State != "Chandigarh")
+# 848 obs. removed 
+
+# Remove all rows with Crop - Other Kharif pulses,  Other Summer Pulses,  other oilseeds,  Other Rabi pulses,  Other Cereals,  Oilseeds total
+crop_data <- crop_data %>%
+  filter(!Crop %in% c("Other Kharif pulses", "Other Summer Pulses", "other oilseeds", "Other Rabi pulses", "Other Cereals", "Oilseeds total"))
+
+# 339566 -325974 obs = 13591 obs removed  
+
+
+
+```
+
+## Studding the data-set
+
+```{r}
+# To determine the different types of seasons in the file, you can use the unique() function to get the unique values in the Season column of the crop_data dataframe:
+unique(crop_data$Season)
+
+unique(crop_data$Crop)
+
+unique(crop_data$Production.Units)
+
+# To find the crops that are grown throughout the year, we can filter the dataset by the "Whole Year" season and then check the unique values in the Crop column. Here's the code to do that: 
+unique(crop_data[crop_data$Season == "Whole Year", "Crop"])
+
+unique(crop_data[crop_data$Production.Units == "Nuts", "Crop"]) # only Coconut
+
+unique(crop_data[crop_data$Production.Units == "Bales", "Crop"]) # Cotton(lint), Mesta, Jute 
+
+
+# Top 10 Crop Production over the years 
+
+# Aggregate data by crop
+crop_production <- aggregate(crop_data$Production_Tonnes ~ crop_data$Crop, crop_data, sum)
+
+# Sort the result in descending order
+top_crops <- crop_production[order(-crop_production$`crop_data$Production_Tonnes`), ]
+
+# Display the top 10 crops
+head(top_crops, 10)
+
+
+
+```
+
+## Normalizing the data
+
+```{r}
+#Normalizing the data 
+
+  library(dplyr)
+
+# select the columns to normalize
+cols_to_normalize <- c("Area", "Production_Tonnes")
+
+# normalize the data
+crop_data_norm <- crop_data %>%
+  mutate_at(vars(cols_to_normalize), scale)
+#This will create a new data frame called crop_data_norm that contains the normalized data. The mutate_at() function applies the scale() function to the columns specified in vars(cols_to_normalize). The vars() function creates a selection helper that is used to select the columns to be transformed.
+
+```
+
+# Gauravjit
+
+## We could try to predict the season in which the crop is grown based on other variables in the dataset. So, the target variable would be the Season column, and the remaining columns would be the predictors.
+
+We could use a variety of classification models for this task, such as logistic regression, decision trees, or random forests. Here's a basic outline of the steps involved in building a classification model:
+
+```{r}
+# Load required packages
+library(caret)
+library(e1071)
+
+# Split the data into training and testing sets
+set.seed(123)
+trainIndex <- createDataPartition(crop_data$Crop, p = .8, list = FALSE)
+trainData <- crop_data[trainIndex, ]
+testData <- crop_data[-trainIndex, ]
+
+# Define the predictors and response variable
+predictors <- names(trainData)[c(4:7, 9:12)] # You can modify this list based on the variables you want to include
+response <- "Crop_Damage"
+
+# Create a pre-processing recipe
+preProcess <- preProcess(trainData[predictors], method = c("center", "scale"))
+
+# Apply the pre-processing recipe to the training and testing data
+trainData[predictors] <- predict(preProcess, trainData[predictors])
+testData[predictors] <- predict(preProcess, testData[predictors])
+
+# Train a support vector machine (SVM) model
+svmModel <- train(trainData[, predictors], trainData[, response], method = "svmRadial", preProcess = c("center", "scale"))
+
+# Make predictions on the testing data using the trained model
+predictions <- predict(svmModel, testData[, predictors])
+
+# Evaluate the performance of the model using confusion matrix
+confusionMatrix(predictions, testData[, response])
+
+
+
+
+```
+
+##  code for decision trees on this 
+
+```{r}
+# Load required library
+library(rpart)
+
+# For memory issue 
+# Subset data to only include the top 10 crops by production
+top_crops <- head(crop_production, 10)
+crop_subset <- subset(crop_data, Crop %in% top_crops$`crop_data$Crop`)
+
+
+# Split data into training and testing sets
+set.seed(123)
+train_index <- sample(nrow(crop_data), 0.7 * nrow(crop_data))
+train_data <- crop_data[train_index, ]
+test_data <- crop_data[-train_index, ]
+
+# Build decision tree model using rpart
+crop_tree <- rpart(Production_Tonnes ~ ., data = train_data, method = "class")
+
+# Print summary of the model
+summary(crop_tree)
+
+# Make predictions on the test set
+predictions <- predict(crop_tree, test_data, type = "class")
+
+# Evaluate the model's performance on the test set
+conf_matrix <- table(predictions, test_data$Crop)
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+print(paste0("Accuracy: ", round(accuracy, 3)))
+
+
+```
+In this code, we first load the rpart package, which we'll use to build our decision tree model. Then we split the data into training and testing sets using a 70-30 split. We use the rpart function to build the decision tree model, specifying the dependent variable as Production_Tonnes and including all other variables as predictors. We also set the method argument to "class", since we want to build a classification tree.
+
+After building the model, we print a summary of its structure using the summary function. Then we use the predict function to make predictions on the test set, specifying the type argument as "class" so that the output is a categorical prediction. Finally, we evaluate the model's performance on the test set by computing the confusion matrix and overall accuracy.
+
+
+```{r}
+#plot the graph of crops 
+
+#This will create a histogram for Production for each crop with separate panels for each crop using facet_wrap().
+library(ggplot2)
+
+ggplot(crop_data, aes(x = Production)) +
+  geom_histogram(binwidth = 500000, color = "black", fill = "blue") +
+  facet_wrap(~ Crop, ncol = 3, scales = "free") +
+  labs(x = "Production", y = "Count")
+
+
+# Plot the histogram and normal probability plot of Production
+library(ggpubr)
+ggarrange(
+  ggplot(crop_data, aes(x = Production)) +
+    geom_histogram(color = "black", fill = "white", bins = 30) +
+    labs(x = "Production", y = "Count"),
+  ggplot(crop_data, aes(sample = Production)) +
+    stat_qq() +
+    geom_abline(color = "red", linetype = "dashed") +
+    labs(x = "Theoretical Quantiles", y = "Sample Quantiles")
+)
+#Result Data is not normaly distributed 
+
+
+```
+
+```{r old Code Gauravjit}
 
 #predict the production of a certain crop in a certain state given certain weather and soil conditions.
 # Split the dataset into training and testing sets. You can use the caret package to do this:
@@ -88,9 +297,6 @@ cat("R-squared:", rsq, "\n")
 
 ```
 
-
-
-
 ```{r}
 #new approach
 
@@ -128,27 +334,227 @@ prediction <- predict(model, newdata = new_data)
 
 ```
 
+################################### 
+
+# Parva
 
 ```{r}
 
-# Install and load required packages
-install.packages("maptools")
-install.packages("terra")
-library(maptools)
-library(terra)
 
-install.packages("sf")
-library(sf)
-setwd("D:/A Gauravjit/NYU MASTERS COURSE/OneDrive - nyu.edu/SEM 2/Data Analytics/PROJECT 3/")
-shapefile <- st_read("india_ds.shp")
+```
 
-# Create terra vector object from shapefile
-shapefile <- vect(shapefile)
+################################## 
 
-# Load the shapefile using terra package
-shapefile <- vect("india_ds.shp")
+# Aditya
+
+```{r}
+#setwd("~/Downloads")
+#crop_data= read.csv("India Agriculture Crop Production.csv", header=TRUE)
+
+crop_data[crop_data==""]=NA
+sum(is.na(crop_data))
+
+summary(crop_data)
+str(crop_data)
+
+crop_data <- na.omit(crop_data) # remove rows with missing values
+crop_data$Year <- as.factor(crop_data$Year) # convert Year to a factor variable
+install.packages("ggplot2")
+library(ggplot2)
+ggplot(crop_data, aes(x=Area, y=Production)) +
+  geom_point()
+
+ggplot(crop_data, aes(x=Crop, y=Production)) +
+  geom_boxplot() +
+  theme(plot.title = element_text(size = 20),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 16, margin = margin(t = 0, r = 10, b = 0, l = 0)))
 
 
+
+ggplot(crop_data, aes(x=Crop, y=`Area`, fill=Crop)) +
+  geom_bar(stat="identity") +
+  theme(legend.position="none",
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 8, lineheight = 0.8)) +
+  labs(title = "Bar Chart of Area Harvested by Crop",
+       x = "Crop",
+       y = "Area (in hectares)") +
+  scale_y_continuous(expand = c(0,0)) +
+  theme(plot.title = element_text(size = 20),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 16, margin = margin(t = 0, r = 10, b = 0, l = 0)))
+
+install.packages("corrplot")
+library(corrplot)
+corrplot(cor(crop_data[,c("Yield", "Production", "Area")]), method="color")
+
+
+
+#Time series chart from production over time.
+library(ggplot2)
+
+crop_data$Year <- as.Date(paste0(crop_data$Year, "-01-01"))
+
+ggplot(crop_data, aes(x = Year, y = Production)) +
+  geom_line() +
+  scale_x_date(date_breaks = "2 year", date_labels = "%Y") +
+  labs(x = "Year", y = "Production")
+
+crop_data <- crop_data[, c("State", "Crop", "Yield", "Production", "Area")]
+crop_data <- na.omit(crop_data)
+
+crop_data_norm <- as.data.frame(scale(crop_data[, 3:5]))
+
+set.seed(123)
+crop_kmeans <- kmeans(crop_data_norm, centers = 3)
+
+library(ggplot2)
+ggplot(crop_data_norm, aes(x = Production, y = Yield, color = factor(crop_kmeans$cluster))) +
+  geom_point(size = 3) +
+  xlab("Production") +
+  ylab("Yield") +
+  ggtitle("Crop Clustering") +
+  theme(plot.title = element_text(size = 20),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_text(size = 16, margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size = 16, margin = margin(t = 0, r = 10, b = 0, l = 0)))
+
+crop_data <- crop_data[crop_data$Season != "Whole Year", ]
+
+crop_data <- subset(crop_data, !grepl("Nuts", crop_data$Production.Units))
+
+# Define a function to convert units to tonnes
+convert_to_tonnes <- function(value, unit) {
+  if (unit == "Tonnes") {
+    return(value)
+  } else if (unit == "Bales") {
+    return(value * 0.218)
+  } else if (unit == "Nuts") {
+    return(value * 0.003)
+  } else {
+    return(NA)
+  }
+}
+
+
+
+# Apply the function to the Production column
+crop_data$Production <- mapply(convert_to_tonnes, crop_data$Production, crop_data$Production.Units)
+
+# Change the units to 'tonnes'
+crop_data$Production.Units <- "tonnes"
+
+crop_data$Year <- as.numeric(substr(crop_data$Year, 1, 4))
+library(dplyr)
+library(caret)
+
+#####Model Tuning#####
+names(crop_data)
+crop_data.df <- select(crop_data,
+                  State,
+                  Crop,
+                  Year,
+                  Season,
+                  Area,
+                  Production,
+                  Yield)
+                  
+                  
+outcomeName='Season'
+predictorNames=names(crop_data)[names(crop_data) != outcomeName]
+
+set.seed(12345)
+split=0.8
+index=createDataPartition(crop_data$Season,times=1,p=split,list=F)
+train.df=crop_data[index,] #Test dataframe
+test.df=crop_data[-index,] #Train dataframe
+
+library(gbm)
+install.packages("randomForest")
+##### MODEL 1 : RF Model##### 
+# Control parameters
+fitControl.1 <- trainControl(method = "none")
+# Model
+rf.1<-train(train.df[,predictorNames],train.df[,outcomeName],
+            method='rf',
+            trControl=fitControl.1)
+# Variables of importance
+rfImp.1<-varImp(rf.1)
+rfImp.1
+plot(rfImp.1)
+# Performance measures
+rf.1.predict<-predict(rf.1,test.df[,predictorNames],type="raw")
+confusionMatrix(rf.1.predict,test.df[,outcomeName], positive = "1")
+
+# Install and load missForest package
+install.packages("missForest")
+library(missForest)
+train.df$State <- as.factor(train.df$State)
+train.df$District <- as.factor(train.df$District)
+train.df$Season <- as.factor(train.df$Season)
+
+train.df$State <- as.factor(train.df$State)
+train.df$District <- as.factor(train.df$District)
+train.df$Crop <- as.factor(train.df$Crop)
+train.df$Season <- as.factor(train.df$Season)
+train.df$Area.Units <- as.factor(train.df$Area.Units)
+
+train.df$State <- as.numeric(as.factor(train.df$State))
+train.df$District <- as.numeric(as.factor(train.df$District))
+train.df$Crop <- as.numeric(as.factor(train.df$Crop))
+train.df$Season <- as.numeric(as.factor(train.df$Season))
+train.df$Area.Units <- as.numeric(as.factor(train.df$Area.Units))
+train.df$State <- as.factor(train.df$State)
+train.df$Production.Units <- as.numeric(as.factor(train.df$Production.Units))
+# Convert Crop column to factor
+train.df$Crop <- as.factor(train.df$Crop)
+
+
+# Impute missing values in the training data
+train.df_imputed <- missForest(train.df)
+
+# Fit the random forest model with imputed data
+rf.1 <- train(train.df_imputed$x, train.df[, outcomeName],
+              method = "rf",
+              trControl = fitControl.1)
+
+# Use the imputed data to make predictions
+rf.1.predict <- predict(rf.1, test.df_imputed$x, type = "raw")
+
+# Evaluate model performance
+confusionMatrix(rf.1.predict, test.df_imputed$y, positive = "1")
+
+
+
+```
+
+################################## 
+
+# Parth
+
+```{r}
+
+
+```
+
+################################## 
+
+# Xitij
+
+```{r}
+
+
+```
+
+################################## 
+
+# kayel
+
+```{r}
 
 
 ```
