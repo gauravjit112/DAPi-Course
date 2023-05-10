@@ -46,6 +46,7 @@ crop_data <- crop_data %>%
 
 ```
 
+
 ## Cleaning the data set in Crop_data
 
 ```{r}
@@ -62,6 +63,23 @@ crop_data <- crop_data %>%
   filter(!Crop %in% c("Other Kharif pulses", "Other Summer Pulses", "other oilseeds", "Other Rabi pulses", "Other Cereals", "Oilseeds total"))
 
 # 339566 -325974 obs = 13591 obs removed  
+
+
+
+```
+
+## Year format change 
+```{r}
+
+
+# Extract season information from Year column
+crop_data$Season <- as.character(crop_data$Season)
+crop_data$Season <- factor(crop_data$Season, levels = c("Rabi", "Winter", "Kharif", "Summer", "Autumn", "Whole Year"))
+
+# Reorder the rows based on the season information
+crop_data <- crop_data[order(crop_data$Season), ]
+
+
 
 
 
@@ -98,7 +116,30 @@ head(top_crops, 10)
 
 
 
+# Top 5 crops in each Season over the years - 
+
+# Calculate the total production for each crop in each season
+crop_season_production <- aggregate(Production_Tonnes ~ Crop + Season, data = crop_data, sum)
+
+# Order the data by season and production in descending order
+crop_season_production <- crop_season_production[order(crop_season_production$Season, -crop_season_production$Production_Tonnes), ]
+
+# Extract the top 5 high-yield crops in each season
+top_5_crops <- by(crop_season_production, crop_season_production$Season, function(x) head(x, 5))
+
+# Print the top 5 high-yield crops in each season
+for (i in seq_along(top_5_crops)) {
+  season <- names(top_5_crops)[i]
+  cat("Season:", season, "\n")
+  cat("Top 5 Crops:", "\n")
+  cat("-------------", "\n")
+  cat(top_5_crops[[i]]$Crop, "\n")
+  cat("\n")
+}
+
+
 ```
+
 
 ## Normalizing the data
 
@@ -119,10 +160,65 @@ crop_data_norm <- crop_data %>%
 
 # Gauravjit
 
+
+### RandomForest working on right now 
+To create a classification model for high, low, and medium crop production, you can follow these steps:
+```{r}
+# Add a new column for the production category
+crop_data$Production_Category <- NA
+
+# Define the thresholds for high, medium, and low production
+high_threshold <- quantile(crop_data$Production_Tonnes, 0.75)
+low_threshold <- quantile(crop_data$Production_Tonnes, 0.25)
+
+# Assign the production category based on the thresholds
+crop_data$Production_Category[crop_data$Production_Tonnes >= high_threshold] <- "High"
+crop_data$Production_Category[crop_data$Production_Tonnes < high_threshold & crop_data$Production_Tonnes >= low_threshold] <- "Medium"
+crop_data$Production_Category[crop_data$Production_Tonnes < low_threshold] <- "Low"
+
+# Convert the production category to a factor variable
+crop_data$Production_Category <- factor(crop_data$Production_Category, levels = c("Low", "Medium", "High"))
+
+# Split the dataset into training and testing data
+set.seed(123)
+train_indices <- sample(1:nrow(crop_data), 0.8 * nrow(crop_data))
+train_data <- crop_data[train_indices, ]
+test_data <- crop_data[-train_indices, ]
+
+# Build a classification model (example using random forest)
+library(randomForest)
+model <- randomForest(Production_Category ~ ., data = train_data)
+
+# Predict the production category for the test data
+predictions <- predict(model, newdata = test_data)
+
+# Evaluate the model performance
+library(caret)
+confusion_matrix <- confusionMatrix(predictions, test_data$Production_Category)
+accuracy <- confusion_matrix$overall['Accuracy']
+precision <- confusion_matrix$byClass['Precision']
+recall <- confusion_matrix$byClass['Recall']
+
+# Print the model performance metrics
+cat("Accuracy:", accuracy, "\n")
+cat("Precision:", precision, "\n")
+cat("Recall:", recall, "\n")
+
+
+
+```
+In this code, we first add a new column Production_Category to store the production category. We then define thresholds for high, medium, and low production based on quartiles. The production category is assigned based on these thresholds. The dataset is split into training and testing data.
+
+Next, we build a classification model using the randomForest function from the randomForest package. We predict the production category for the test data and evaluate the model's performance using metrics such as accuracy, precision, and recall.
+
+You can adjust the classification algorithm and evaluate different metrics based on your specific requirements and preferences.
+
+
+
+
 ## We could try to predict the season in which the crop is grown based on other variables in the dataset. So, the target variable would be the Season column, and the remaining columns would be the predictors.
 
 We could use a variety of classification models for this task, such as logistic regression, decision trees, or random forests. Here's a basic outline of the steps involved in building a classification model:
-
 ```{r}
 # Load required packages
 library(caret)
@@ -159,8 +255,7 @@ confusionMatrix(predictions, testData[, response])
 
 ```
 
-##  code for decision trees on this 
-
+###  Decision trees 
 ```{r}
 # Load required library
 library(rpart)
@@ -198,6 +293,9 @@ In this code, we first load the rpart package, which we'll use to build our deci
 After building the model, we print a summary of its structure using the summary function. Then we use the predict function to make predictions on the test set, specifying the type argument as "class" so that the output is a categorical prediction. Finally, we evaluate the model's performance on the test set by computing the confusion matrix and overall accuracy.
 
 
+
+
+
 ```{r}
 #plot the graph of crops 
 
@@ -226,79 +324,11 @@ ggarrange(
 
 ```
 
-```{r old Code Gauravjit}
-
-#predict the production of a certain crop in a certain state given certain weather and soil conditions.
-# Split the dataset into training and testing sets. You can use the caret package to do this:
-library(caret)
-set.seed(123) # for reproducibility
-train_index <- createDataPartition(crop_data$Production, p = 0.8, list = FALSE)
-train_data <- crop_data[train_index, ]
-test_data <- crop_data[-train_index, ]
-
-#  There are many options, including linear regression, decision trees, random forests, and neural networks. 
-names(train_data)
-
-# In this case, we can choose "Production" as the dependent variable and use the other variables as independent variables. Our hypothesis is that the production of crops is affected by various factors such as state, district, crop, year, season, area, and yield.
-
-# Create the linear regression model
-model <- lm(Production ~ State + District + Crop + Year + Season + Area + Yield, data = crop_data)
-
-# Print the summary of the model
-summary(model)
-
-#Evaluate the model's performance on the testing data. You can use metrics like mean squared error (MSE), mean absolute error (MAE), and R-squared.
-predictions <- predict(model, test_data)
-mse <- mean((test_data$Production - predictions)^2)
-mae <- mean(abs(test_data$Production - predictions))
-rsq <- cor(test_data$Production, predictions)^2
 
 
-
-# Load necessary libraries
-library(ggplot2)
-library(dplyr)
-
-# Create a summary of the model
-model_summary <- summary(model)
-
-# Extract coefficients and p-values
-coef_df <- as.data.frame(model_summary$coefficients) %>%
-  mutate(var = rownames(.)) %>%
-  select(var, Estimate, `Pr(>|t|)`)
-
-# Create a bar plot of the coefficients
-ggplot(coef_df, aes(x = var, y = Estimate)) +
-  geom_col() +
-  coord_flip() +
-  ggtitle("Coefficients of the Linear Regression Model") +
-  xlab("") +
-  ylab("Estimate")
-
-# Create a histogram of the residuals
-ggplot(data.frame(resid = model_summary$residuals), aes(x = resid)) +
-  geom_histogram(binwidth = 1e7) +
-  ggtitle("Histogram of Residuals") +
-  xlab("Residuals") +
-  ylab("Count")
-
-# Create a scatter plot of the predicted vs actual values
-ggplot(data.frame(pred = predictions, actual = test_data$Production), aes(x = actual, y = pred)) +
-  geom_point() +
-  geom_abline(slope = 1, intercept = 0, color = "red") +
-  ggtitle("Predicted vs Actual Production Values") +
-  xlab("Actual Production") +
-  ylab("Predicted Production")
-
-# Print the model's performance metrics
-cat("Mean squared error:", mse, "\n")
-cat("Mean absolute error:", mae, "\n")
-cat("R-squared:", rsq, "\n")
-
-```
 
 ```{r}
-#new approach
+#OLD
 
 # Create a training and testing set
 set.seed(123)
