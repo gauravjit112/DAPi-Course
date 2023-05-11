@@ -724,6 +724,123 @@ confusionMatrix(rf.1.predict, test.df_imputed$y, positive = "1")
 # Xitij
 
 ```{r}
+# Load the necessary packages
+library(tidyverse)
+
+# Read the dataset
+data <- read.csv("/Users/xitijmoradiya/Desktop/India Agriculture Crop Production.csv")
+#View(data)
+# Remove rows with missing data
+na.omit(data)
+
+# Remove entries with season "Whole year"
+data <- data %>% filter(Season != "Whole year")
+data <- data %>% filter(Production.Units != "Nuts")
+
+# Define conversion factors
+conversion_factor <- c("Bales" = 5)
+
+#names(data)
+
+data$Production_tonnes <- ifelse(is.na(data$Production.Units), NA, 
+                                 ifelse(data$Production.Units %in% names(conversion_factor), 
+                                        as.numeric(data$Production) * conversion_factor[data$Production.Units], 
+                                        as.numeric(data$Production)))
+#View(data)
+
+# Remove original Production column
+data$Production <- NULL
+data$Production.Units <- NULL
+
+# View the first few rows of the preprocessed data
+#View(data)
+
+#nrow(data)
+
+# Load the necessary packages
+
+library(randomForest)
+#install.packages("mice")
+library(mice)
+
+data <- data %>% na.omit()
+# Group the less common categories into an "Other" category
+top_crops <- data %>%
+  group_by(Crop) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(10) %>%
+  select(Crop) %>%
+  unlist()
+
+data$Crop <- ifelse(data$Crop %in% top_crops, as.character(data$Crop), "Other")
+
+# Convert the Crop column to a factor variable
+data$Crop <- as.factor(data$Crop)
+
+#View(data)
+
+# Split the data into training and testing sets
+set.seed(123)
+train_index <- sample(nrow(data), 0.7 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+
+# Create a random forest model with default parameters
+rf_model <- randomForest(Crop ~ ., data = train_data)
+
+# Make predictions on the test set
+predictions <- predict(rf_model, test_data)
+
+# Evaluate the model's accuracy
+accuracy <- mean(predictions == test_data$Crop)
+cat("Accuracy:", accuracy, "\n")
+
+library(dplyr)
+library(ggplot2)
+#View(data)
+
+top_10_seasonal_crops <- data %>%
+  group_by(Season) %>%
+  slice_max(order_by = Production_tonnes, n = 10)
+
+# Print the result
+print(top_10_seasonal_crops)
+View(top_10_seasonal_crops)
+
+
+top_10_seasonal_crops <- data %>%
+  group_by(Season) %>%
+  filter(!is.na(Production_tonnes)) %>%
+  arrange(desc(Production_tonnes)) %>%
+  slice_head(n = 10) %>%
+  select(Season, Crop, Production_tonnes, State)
+
+# Print the result
+print(top_10_seasonal_crops)
+View(top_10_seasonal_crops)
+
+
+
+unique(data$Season)
+library(ggplot2)
+
+# Filter data for summer season
+summer_data <- data %>% filter(Season == "Winter")
+
+# Get top 10 crops for summer season
+top_crops_summer <- summer_data %>%
+  group_by(Crop) %>%
+  summarize(Production_tonnes = sum(Production_tonnes, na.rm = TRUE)) %>%
+  arrange(desc(Production_tonnes)) %>%
+  head(10)
+
+# Create bar plot
+ggplot(top_crops_summer, aes(x = Crop, y = Production_tonnes)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Top 10 Crops by Production in Tonnes (Winter Season)",
+       x = "Crop", y = "Production (Tonnes)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 
 ```
