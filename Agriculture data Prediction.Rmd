@@ -68,7 +68,7 @@ crop_data <- crop_data %>%
 
 ```
 
-## Year format change 
+## order change according to season  
 ```{r}
 
 
@@ -78,10 +78,6 @@ crop_data$Season <- factor(crop_data$Season, levels = c("Rabi", "Winter", "Khari
 
 # Reorder the rows based on the season information
 crop_data <- crop_data[order(crop_data$Season), ]
-
-
-
-
 
 ```
 
@@ -141,7 +137,7 @@ for (i in seq_along(top_5_crops)) {
 ```
 
 
-## Normalizing the data
+## Normalizing the data if needed 
 
 ```{r}
 #Normalizing the data 
@@ -158,12 +154,22 @@ crop_data_norm <- crop_data %>%
 
 ```
 
+
+
+
+
+
 # Gauravjit
 
 
 ### RandomForest working on right now 
 To create a classification model for high, low, and medium crop production, you can follow these steps:
 ```{r}
+
+## install.packages("randomForest")
+
+# summary(crop_data$Production_Tonnes)
+
 # Add a new column for the production category
 crop_data$Production_Category <- NA
 
@@ -364,6 +370,9 @@ prediction <- predict(model, newdata = new_data)
 
 ```
 
+
+
+
 ################################### 
 
 # Parva
@@ -372,6 +381,9 @@ prediction <- predict(model, newdata = new_data)
 
 
 ```
+
+
+
 
 ################################## 
 
@@ -562,6 +574,9 @@ confusionMatrix(rf.1.predict, test.df_imputed$y, positive = "1")
 
 ```
 
+
+
+
 ################################## 
 
 # Parth
@@ -571,6 +586,9 @@ confusionMatrix(rf.1.predict, test.df_imputed$y, positive = "1")
 
 ```
 
+
+
+
 ################################## 
 
 # Xitij
@@ -579,6 +597,9 @@ confusionMatrix(rf.1.predict, test.df_imputed$y, positive = "1")
 
 
 ```
+
+
+
 
 ################################## 
 
