@@ -161,14 +161,93 @@ crop_data_norm <- crop_data %>%
 
 # Gauravjit
 
+# Build a Random forest for high low and medium production on this data set for top 5 crops in each season for prediction of production in next 5 years 
+```{r}
+# Load required libraries
+library(randomForest)
 
-### RandomForest working on right now 
+# Prepare the data
+#crop_data <- read.csv("https://raw.githubusercontent.com/gauravjit112/DAPi-Course/main/India%20Agriculture%20Crop%20Production.csv", 
+                      header = TRUE, 
+                      stringsAsFactors = FALSE)
+
+#crop_data[crop_data == ""] <- NA
+#crop_data <- na.omit(crop_data)
+#crop_data$Year <- as.factor(crop_data$Year)
+
+# Convert production units to Tonnes
+#conversion_table <- data.frame(
+#  Crop.Unit = c("Kg", "Quintal", "Tonnes", "Bales", "Nuts"),
+#  Conversion.Rate = c(0.001, 0.1, 1, 0.218, 0.003)
+#)
+
+#crop_data <- merge(crop_data, conversion_table, by.x = "Production.Units", by.y = "Crop.Unit", all.x = TRUE)
+#crop_data$Production_Tonnes <- crop_data$Production * crop_data$Conversion.Rate
+
+# Filter dataset for top 5 crops in each season
+top_crops <- c("Wheat", "Potato", "Gram", "Rapeseed &Mustard", "Rice",
+               "Rice", "Potato", "Sugarcane", "Urad", "Ragi",
+               "Sugarcane", "Rice", "Maize", "Soyabean", "Bajra",
+               "Rice", "Maize", "Bajra", "Banana", "Groundnut",
+               "Rice", "Maize", "Ragi", "Groundnut", "Urad",
+               "Sugarcane", "Coconut", "Potato", "Banana", "Tapioca")
+
+filtered_data <- crop_data[crop_data$Crop %in% top_crops, ]
+
+# Split the filtered dataset into training and testing data
+set.seed(123)
+train_indices <- sample(1:nrow(filtered_data), 0.8 * nrow(filtered_data))
+train_data <- filtered_data[train_indices, ]
+test_data <- filtered_data[-train_indices, ]
+
+# Build the Random Forest model
+model <- randomForest(factor(Production_Category) ~ ., data = train_data)
+
+# Predict the production category for the test data
+predictions <- predict(model, newdata = test_data)
+
+
+
+
+# Evaluate the model performance (optional)
+# You can use various metrics such as accuracy, precision, recall, and F1 score to evaluate the model's performance.
+
+# Calculate performance metrics
+actual_labels <- test_data$Production_Category
+
+# Accuracy
+accuracy <- sum(predictions == actual_labels) / length(actual_labels)
+
+# Create a confusion matrix
+confusion_matrix <- table(actual_labels, predictions)
+
+# Precision, Recall, and F1 score
+precision <- diag(confusion_matrix) / colSums(confusion_matrix)
+recall <- diag(confusion_matrix) / rowSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Print the performance metrics
+cat("Accuracy:", accuracy, "\n")
+cat("Precision:", precision, "\n")
+cat("Recall:", recall, "\n")
+cat("F1 Score:", f1_score, "\n")
+
+
+
+#Once you have trained and evaluated the model, you can use it to predict the production category for the next 5 years on the same dataset. Make sure to include the new data for the next 5 years and preprocess it in the same way as the training data before making predictions.
+```
+
+
+
+### RandomForest -  taking too much time 
 To create a classification model for high, low, and medium crop production, you can follow these steps:
 ```{r}
+# Install required packages
+#install.packages(c("randomForest", "caret"))
 
-## install.packages("randomForest")
-
-# summary(crop_data$Production_Tonnes)
+# Load required libraries
+#library(randomForest)
+#library(caret)
 
 # Add a new column for the production category
 crop_data$Production_Category <- NA
@@ -185,6 +264,9 @@ crop_data$Production_Category[crop_data$Production_Tonnes < low_threshold] <- "L
 # Convert the production category to a factor variable
 crop_data$Production_Category <- factor(crop_data$Production_Category, levels = c("Low", "Medium", "High"))
 
+# Remove independent variables with only one unique value
+crop_data <- crop_data[, sapply(crop_data, function(x) length(unique(x))) > 1]
+
 # Split the dataset into training and testing data
 set.seed(123)
 train_indices <- sample(1:nrow(crop_data), 0.8 * nrow(crop_data))
@@ -192,24 +274,28 @@ train_data <- crop_data[train_indices, ]
 test_data <- crop_data[-train_indices, ]
 
 # Build a classification model (example using random forest)
-library(randomForest)
 model <- randomForest(Production_Category ~ ., data = train_data)
 
 # Predict the production category for the test data
 predictions <- predict(model, newdata = test_data)
 
-# Evaluate the model performance
-library(caret)
-confusion_matrix <- confusionMatrix(predictions, test_data$Production_Category)
-accuracy <- confusion_matrix$overall['Accuracy']
-precision <- confusion_matrix$byClass['Precision']
-recall <- confusion_matrix$byClass['Recall']
+# Evaluate the model performance using cross-validation
+cv_results <- train(
+  Production_Category ~ .,
+  data = crop_data,
+  method = "rf",
+  trControl = trainControl(method = "cv", number = 5)
+)
+
+# Access the performance metrics from cross-validation results
+accuracy <- cv_results$results$Accuracy
+precision <- cv_results$results$Precision
+recall <- cv_results$results$Recall
 
 # Print the model performance metrics
-cat("Accuracy:", accuracy, "\n")
-cat("Precision:", precision, "\n")
-cat("Recall:", recall, "\n")
-
+cat("Mean Accuracy:", mean(accuracy), "\n")
+cat("Mean Precision:", mean(precision), "\n")
+cat("Mean Recall:", mean(recall), "\n")
 
 
 ```
@@ -218,8 +304,6 @@ In this code, we first add a new column Production_Category to store the product
 Next, we build a classification model using the randomForest function from the randomForest package. We predict the production category for the test data and evaluate the model's performance using metrics such as accuracy, precision, and recall.
 
 You can adjust the classification algorithm and evaluate different metrics based on your specific requirements and preferences.
-
-
 
 
 ## We could try to predict the season in which the crop is grown based on other variables in the dataset. So, the target variable would be the Season column, and the remaining columns would be the predictors.
@@ -260,6 +344,7 @@ confusionMatrix(predictions, testData[, response])
 
 
 ```
+
 
 ###  Decision trees 
 ```{r}
