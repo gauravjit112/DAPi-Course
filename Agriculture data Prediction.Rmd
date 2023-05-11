@@ -161,6 +161,7 @@ crop_data_norm <- crop_data %>%
 
 # Gauravjit
 
+
 # Build a Random forest for high low and medium production on this data set for top 5 crops in each season for prediction of production in next 5 years 
 ```{r}
 # Load required libraries
@@ -168,8 +169,8 @@ library(randomForest)
 
 # Prepare the data
 #crop_data <- read.csv("https://raw.githubusercontent.com/gauravjit112/DAPi-Course/main/India%20Agriculture%20Crop%20Production.csv", 
-                      header = TRUE, 
-                      stringsAsFactors = FALSE)
+#                      header = TRUE, 
+#                      stringsAsFactors = FALSE)
 
 #crop_data[crop_data == ""] <- NA
 #crop_data <- na.omit(crop_data)
@@ -233,12 +234,56 @@ cat("Recall:", recall, "\n")
 cat("F1 Score:", f1_score, "\n")
 
 
-
-#Once you have trained and evaluated the model, you can use it to predict the production category for the next 5 years on the same dataset. Make sure to include the new data for the next 5 years and preprocess it in the same way as the training data before making predictions.
 ```
 
+#Prediction
+
+use it to predict which crop will have high production for the next year on the same dataset. 
+
+To predict which crop will have high production for the next year using the Random Forest model, you need to first preprocess the dataset to include only the relevant features for prediction and ensure that the data is in the same format as the training data. Then, you can use the trained model to make predictions for the next year. Here's the code to perform the prediction:
+```{r}
+
+# Preprocess the dataset for prediction
+prediction_data <- crop_data[crop_data$Year == 2024, ] # Replace "2024" with the desired year for prediction
+prediction_data <- prediction_data[prediction_data$Crop %in% top_crops$`crop_data$Crop`, ] # Filter for top crops
+prediction_data$Season <- factor(prediction_data$Season, levels = levels(crop_data$Season)) # Ensure consistent factor levels
+prediction_data <- droplevels(prediction_data) # Remove unused factor levels
+
+# Make predictions using the trained model
+predictions <- predict(model, newdata = prediction_data)
+
+# Get the predicted high production crops
+predicted_high_production_crops <- prediction_data[predictions == "High", "Crop"]
+
+# Display the predicted high production crops
+cat("Predicted high production crops for the next year:", "\n")
+cat("----------------------------------------------", "\n")
+cat(predicted_high_production_crops, "\n")
 
 
+
+
+
+
+```
+Make sure to replace "2024" in the code with the desired year for prediction. The code will filter the dataset for that specific year, select only the top crops used in the training data, and then use the trained model to predict the production categories. Finally, it will display the predicted high production crops for the next year based on the model's predictions.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#############################################################################################################
 ### RandomForest -  taking too much time 
 To create a classification model for high, low, and medium crop production, you can follow these steps:
 ```{r}
